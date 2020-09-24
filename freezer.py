@@ -126,7 +126,6 @@ def Freeze(fnc = NotInitialized,
                 newDecoList.append(deco)
                 
     except AttributeError as e:
-        print(e, type(e))
         isNotLambda = False
 
         # This is, likely, a call of `Freeze` on a <lambda>.
