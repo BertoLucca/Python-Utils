@@ -103,8 +103,8 @@ def Freeze(fnc = NotInitialized,
     # This block removes 'Freeze' from the decorators list of the to-be
     # decorated function by finding the name by wich `Freeze` is stored in the
     # code.
-    # If no `Freeze` is found on the decorators list, this function was either
-    # called on the right-hand-side of an assignment.
+    # If no `Freeze` is found on the decorators list, this function was called
+    # on the right-hand-side of an assignment.
     try:
         for deco in astTgt.decorator_list:
             if isinstance(deco, ast.Name) and scope[deco.id] is Freeze:
@@ -126,16 +126,17 @@ def Freeze(fnc = NotInitialized,
                 newDecoList.append(deco)
                 
     except AttributeError as e:
-        isNotAssign = False
+        print(e, type(e))
+        isNotLambda = False
 
-        # This is, likely, an assignment of a `Freeze` call.
+        # This is, likely, a call of `Freeze` on a <lambda>.
         if isinstance(astTgt, ast.Assign):
             astTgt = astTgt.value.args[0]
             
         else:
             raise e
     else:
-        isNotAssign = True
+        isNotLambda = True
 
     # <!-- End -->
 
@@ -147,12 +148,12 @@ def Freeze(fnc = NotInitialized,
 
     newFnc = ConstantReplacer(scope).visit(astTgt)
     
-    if isNotAssign:
+    if isNotLambda:
         newFnc.decorator_list = newDecoList
 
     ast.fix_missing_locations(newFnc)
 
-    if isNotAssign:
+    if isNotLambda:
         astMod.body[0] = newFnc
         
     else:
@@ -160,8 +161,8 @@ def Freeze(fnc = NotInitialized,
 
     exec(compile(astMod, '<ast>', 'exec'))
     
-    if isNotAssign:
-        fnc.__code__ = locals()[newFnc.name].__code__
+    if isNotLambda:
+        fnc = locals()[newFnc.name]
         
     else:
         fnc = locals()[astMod.body[0].targets[0].id]
