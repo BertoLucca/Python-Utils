@@ -35,6 +35,7 @@ class ConstantReplacer(ast.NodeTransformer):
         if node.id in self.freeze_keys:
             if isinstance(node.ctx, ast.Load):
                 return ast.Constant(value=self.freeze_data[node.id], kind=None)
+            
             else:
                 del self.freeze_data[node.id]
                 return node
@@ -56,6 +57,7 @@ def Freeze(fnc = NotInitialized,
                Freeze(fnc = _fnc, enforce_globals = enforce_globals,
                       overwrite_with = overwrite_with, ignore = ignore,
                       depth = 1)
+    
     elif not isinstance(fnc, (FunctionType, type)):
         # This decorator should work only on Functions, Lambdas, and Classes.
         raise FreezeError("incorrect input.")
@@ -69,10 +71,11 @@ def Freeze(fnc = NotInitialized,
             astMod = ast.parse(source_code)
             
         except IndentationError:
-            pass
-        
-        finally:
+            # The try block would throw an error when this function is used
+            # as of `h = Freeze(f)` and `f` already belongs to the global scope.
             astMod = ast.parse(src)
+            
+        finally:
             astTgt = astMod.body[0]
         
         # Go to the scope where the function is defined.
@@ -82,6 +85,7 @@ def Freeze(fnc = NotInitialized,
         if enforce_globals:
             scope = frame.f_locals.copy()
             scope.update(frame.f_globals)
+            
         else:
             scope = frame.f_globals.copy()
             scope.update(frame.f_locals)
@@ -95,16 +99,18 @@ def Freeze(fnc = NotInitialized,
     finally:
         del frame
 
-    # This block removes 'Freeze' from the decorator list.
     # <!-- Begin -->
-
-    # Finds the name by wich `Freeze` is stored in the code. Otherwise it
-    # will notice the function was called on a <lambda>.
+    # This block removes 'Freeze' from the decorators list of the to-be
+    # decorated function by finding the name by wich `Freeze` is stored in the
+    # code.
+    # If no `Freeze` is found on the decorators list, this function was either
+    # called on the right-hand-side of an assignment.
     try:
         for deco in astTgt.decorator_list:
             if isinstance(deco, ast.Name) and scope[deco.id] is Freeze:
                 _self = deco.id
                 break
+                
             elif isinstance(deco, ast.Call) and scope[deco.func.id] is Freeze:
                 _self = deco.func.id
                 break
@@ -122,9 +128,10 @@ def Freeze(fnc = NotInitialized,
     except AttributeError as e:
         isNotAssign = False
 
-        # This is, likely, a lambda function or assignment of a Freeze call.
+        # This is, likely, an assignment of a `Freeze` call.
         if isinstance(astTgt, ast.Assign):
             astTgt = astTgt.value.args[0]
+            
         else:
             raise e
     else:
@@ -135,9 +142,7 @@ def Freeze(fnc = NotInitialized,
     # Clean our stored variables to keep only the values which are stored as
     # constants, or not to-be ignored.
     for key, value in scope.copy().items(): 
-        if not isinstance(value, _constantTypes):
-            del scope[key]
-        elif key in ignore:
+        if not isinstance(value, _constantTypes) or key in ignore:
             del scope[key]
 
     newFnc = ConstantReplacer(scope).visit(astTgt)
@@ -149,6 +154,7 @@ def Freeze(fnc = NotInitialized,
 
     if isNotAssign:
         astMod.body[0] = newFnc
+        
     else:
         astMod.body[0].value = newFnc
 
@@ -156,6 +162,7 @@ def Freeze(fnc = NotInitialized,
     
     if isNotAssign:
         fnc.__code__ = locals()[newFnc.name].__code__
+        
     else:
         fnc = locals()[astMod.body[0].targets[0].id]
 
